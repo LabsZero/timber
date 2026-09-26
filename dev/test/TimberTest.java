@@ -42,6 +42,10 @@ public class TimberTest {
     static EmbeddedChannel channel;
     static int passed, failed;
     static final List<String> failures = new ArrayList<>();
+    /** Runs on the server thread at the end of every tick while set (see everyTick). */
+    static Runnable sampler;
+    /** Game time of the last destroy() (the pack reacts in the next tick). */
+    static long destroyedAt;
 
     public static void main(String[] args) throws Exception {
         server = boot();
@@ -52,6 +56,7 @@ public class TimberTest {
         }
         ticks(20);
         level = server.overworld();
+        on(() -> { server.addTickable(() -> { if (sampler != null) sampler.run(); }); return null; });
         try {
             if (args.length >= 2 && args[0].equals("explore")) {
                 explore(Path.of(args[1]));
@@ -106,6 +111,13 @@ public class TimberTest {
     }
 
     static <T> T on(Callable<T> task) {
+        if (server.isSameThread()) {
+            try {
+                return task.call();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
         AtomicReference<T> out = new AtomicReference<>();
         AtomicReference<Throwable> err = new AtomicReference<>();
         server.submit(() -> {
@@ -277,7 +289,7 @@ public class TimberTest {
     }
 
     static boolean destroy(BlockPos pos) {
-        return on(() -> player.gameMode.destroyBlock(pos));
+        return on(() -> { destroyedAt = level.getGameTime(); return player.gameMode.destroyBlock(pos); });
     }
 
     static String blockId(BlockPos pos) {
@@ -367,14 +379,22 @@ public class TimberTest {
     /** Per-tick record of the first felled tree: pitch/yaw of its displays until they are gone (or maxTicks). */
     static class AnimTrace {
         final List<float[]> rot = new ArrayList<>();
+        final List<Long> time = new ArrayList<>();
         final List<String> blocks = new ArrayList<>();
         final List<float[]> offsets = new ArrayList<>();
         double[] pivot;
         int displays;
+        Display.BlockDisplay top;
+        java.util.concurrent.CompletableFuture<Void> done;
+
+        /** Server ticks from the first sample to the last, inclusive (game time, not sample count). */
+        int ticks() { return time.isEmpty() ? 0 : (int) (end() - time.get(0)) + 1; }
+
+        long end() { return time.isEmpty() ? 0 : time.get(time.size() - 1); }
 
         String summary() {
             StringBuilder sb = new StringBuilder();
-            sb.append(displays).append(" displays, ").append(rot.size()).append(" ticks, pitch:");
+            sb.append(displays).append(" displays, ").append(ticks()).append(" ticks, pitch:");
             for (float[] r : rot) sb.append(' ').append(Math.round((r[1] + r[3]) * 10) / 10.0);
             if (!rot.isEmpty()) sb.append(" yaw=").append(rot.get(0)[0]);
             return sb.toString();
@@ -394,44 +414,80 @@ public class TimberTest {
     }
 
     static AnimTrace trace(int maxTicks) throws InterruptedException {
-        AnimTrace tr = new AnimTrace();
-        List<Display.BlockDisplay> ds = new ArrayList<>(treeDisplays());
-        tr.displays = ds.size();
-        if (ds.isEmpty()) return tr;
-        on(() -> {
-            Display.BlockDisplay top = null;
-            float best = -1e9f;
-            for (Display.BlockDisplay d : ds) {
-                if (!d.entityTags().contains("timber.lg")) continue;
-                float y = TimberTest.<org.joml.Vector3fc>displayData(d, "DATA_TRANSLATION_ID").y();
-                if (y > best) { best = y; top = d; }
-            }
-            if (top != null) { ds.remove(top); ds.add(0, top); }
-            return null;
-        });
-        on(() -> {
-            Display.BlockDisplay first = ds.get(0);
-            tr.pivot = new double[] {first.getX(), first.getY(), first.getZ()};
-            for (Display.BlockDisplay d : ds) {
-                org.joml.Vector3fc t = displayData(d, "DATA_TRANSLATION_ID");
-                tr.blocks.add(displayBlock(d).toString().replace("\"", "'"));
-                tr.offsets.add(new float[] {t.x(), t.y(), t.z()});
-            }
-            return null;
-        });
-        org.joml.Quaternionf l0 = on(() -> new org.joml.Quaternionf(TimberTest.<org.joml.Quaternionfc>displayData(ds.get(0), "DATA_LEFT_ROTATION_ID")));
-        for (int i = 0; i < maxTicks; i++) {
-            float[] r = on(() -> {
-                Display.BlockDisplay d = ds.get(0);
-                org.joml.Quaternionf q = new org.joml.Quaternionf(TimberTest.<org.joml.Quaternionfc>displayData(d, "DATA_LEFT_ROTATION_ID")).mul(new org.joml.Quaternionf(l0).conjugate());
-                float extra = (float) Math.toDegrees(2 * Math.atan2(q.x, q.w));
-                return new float[] {d.getYRot(), d.getXRot(), d.isRemoved() ? 1 : 0, extra};
-            });
-            tr.rot.add(r);
-            if (r[2] == 1) break;
-            ticks(1);
-        }
+        AnimTrace tr = armTrace(maxTicks, false);
+        await(tr.done);
         return tr;
+    }
+
+    /**
+     * Follows the tree's top log once per tick (see everyTick). With waitForTree the trace starts at the end of the first
+     * tick that has tree displays (arm it before the chop, and the first sample is the chop tick); otherwise no displays = empty trace.
+     */
+    static AnimTrace armTrace(int maxTicks, boolean waitForTree) {
+        AnimTrace tr = new AnimTrace();
+        int[] waited = {0};
+        tr.done = everyTick(gt -> {
+            if (tr.top == null) {
+                List<Display.BlockDisplay> ds = treeDisplays();
+                if (ds.isEmpty()) return waitForTree && ++waited[0] <= maxTicks;
+                float best = -1e9f;
+                for (Display.BlockDisplay d : ds) {
+                    if (!d.entityTags().contains("timber.lg")) continue;
+                    float y = TimberTest.<org.joml.Vector3fc>displayData(d, "DATA_TRANSLATION_ID").y();
+                    if (y > best) { best = y; tr.top = d; }
+                }
+                if (tr.top == null) tr.top = ds.get(0);
+                ds.remove(tr.top);
+                ds.add(0, tr.top);
+                tr.displays = ds.size();
+                tr.pivot = new double[] {tr.top.getX(), tr.top.getY(), tr.top.getZ()};
+                for (Display.BlockDisplay d : ds) {
+                    org.joml.Vector3fc t = displayData(d, "DATA_TRANSLATION_ID");
+                    tr.blocks.add(displayBlock(d).toString().replace("\"", "'"));
+                    tr.offsets.add(new float[] {t.x(), t.y(), t.z()});
+                }
+            }
+            Display.BlockDisplay d = tr.top;
+            // the rest left_rotation is identity, and the pose puts only the pitch residual (about x) there
+            org.joml.Quaternionfc q = displayData(d, "DATA_LEFT_ROTATION_ID");
+            float extra = (float) Math.toDegrees(2 * Math.atan2(q.x(), q.w()));
+            tr.rot.add(new float[] {d.getYRot(), d.getXRot(), d.isRemoved() ? 1 : 0, extra});
+            tr.time.add(gt);
+            return !d.isRemoved() && tr.rot.size() < maxTicks;
+        });
+        return tr;
+    }
+
+    /**
+     * Runs step on the server thread now, then at the end of every tick, with the game time, until it returns false.
+     * A harness thread that falls behind the server can't skip ticks this way. One at a time.
+     */
+    static java.util.concurrent.CompletableFuture<Void> everyTick(java.util.function.LongPredicate step) {
+        java.util.concurrent.CompletableFuture<Void> done = new java.util.concurrent.CompletableFuture<>();
+        Runnable run = () -> {
+            try {
+                if (step.test(level.getGameTime())) return;
+                sampler = null;
+                done.complete(null);
+            } catch (Throwable t) {
+                sampler = null;
+                done.completeExceptionally(t);
+            }
+        };
+        on(() -> {
+            run.run();
+            if (!done.isDone()) sampler = run;
+            return null;
+        });
+        return done;
+    }
+
+    static void await(java.util.concurrent.CompletableFuture<?> done) throws InterruptedException {
+        while (!done.isDone()) {
+            if (!server.isRunning()) throw new IllegalStateException("server stopped while sampling ticks");
+            Thread.sleep(2);
+        }
+        done.join();
     }
 
     /** Leaves whose distance disagrees with vanilla's rule (1 + min over 6 neighbours, logs = 0, capped at 7). */
@@ -654,7 +710,9 @@ class Scenarios {
         int logs = count(Scenarios::isLog, 6), leaves = count(Scenarios::natLeaf, 6), hidden = enclosedLeaves(6);
         hold("minecraft:iron_axe");
         stand(-2, 0, -90);
+        TimberTest.AnimTrace tr = TimberTest.armTrace(120, true);
         chop(0, 0, 0);
+        long chopped = TimberTest.destroyedAt;
         int d = displays();
         check("oak: world blocks replaced by displays in one tick", count(Scenarios::isLog, 6) == 0 && count(Scenarios::natLeaf, 6) == 0,
             "logs left " + count(Scenarios::isLog, 6) + ", leaves left " + count(Scenarios::natLeaf, 6));
@@ -662,14 +720,14 @@ class Scenarios {
             d + " displays for " + (logs - 1) + " logs + " + leaves + " leaves - " + hidden + " enclosed");
         check("oak: no stand-in blocks left behind", blocks("minecraft:structure_void", 8) == 0, blocks("minecraft:structure_void", 8) + " structure voids");
         check("oak: falls away from the player, tipped 33.75 deg to one side", Math.abs(Math.abs(((ctlYaw() % 360) + 360) % 360 - 270) - 33.75) < 0.01, "yaw " + ctlYaw());
-        TimberTest.AnimTrace tr = finish(120);
+        TimberTest.await(tr.done);
         info("oak pitch per tick: " + pitches(tr));
         List<Float> pitch = new ArrayList<>();
         for (float[] r : tr.rot) if (r[2] == 0) pitch.add(r[1] + r[3]);
         float min0 = 0, max = -99;
         int maxAt = -1;
         for (int i = 0; i < pitch.size(); i++) {
-            if (i < 20) min0 = Math.min(min0, pitch.get(i));
+            if (tr.time.get(i) - chopped <= 20) min0 = Math.min(min0, pitch.get(i));
             if (pitch.get(i) > max + 0.01f) { max = pitch.get(i); maxAt = i; }
         }
         int dips = 0;
@@ -681,7 +739,8 @@ class Scenarios {
         check("oak: lands flat on open ground", max > 89.9f, "impact pitch " + max + " at tick " + maxAt);
         check("oak: two bounces", dips == 2, dips + " dips after impact");
         check("oak: lies still while the trunk pops apart", rest >= 10, rest + " still ticks");
-        check("oak: whole gag lasts 2.3-3.5 s", tr.rot.size() >= 46 && tr.rot.size() <= 70, tr.rot.size() + " ticks");
+        int gag = (int) (tr.end() - chopped);
+        check("oak: whole gag lasts 2.3-3.5 s", gag >= 46 && gag <= 70, gag + " ticks");
         tick(2);
         check("oak: displays and controller gone at the end", displays() == 0 && TimberTest.controllers() == 0, displays() + " displays, " + TimberTest.controllers() + " controllers");
         int dropped = itemsOf("minecraft:oak_log", 24);
@@ -1094,8 +1153,8 @@ class Scenarios {
                 TimberTest.on(() -> { for (BlockPos q : BlockPos.betweenClosed(cx - 14, Y - 1, cz - 14, cx + 14, Y + 40, cz + 14)) if (isLog(TimberTest.level.getBlockState(q))) where.append(q.getX() - cx).append(',').append(q.getY() - Y).append(',').append(q.getZ() - cz).append(' '); return null; });
                 info("  " + f + " left logs at " + where + "| base y " + (base.getY() - Y) + " n " + score("#n") + " l1 " + score("#l1") + " crown " + score("#crown") + " tree " + score("#tree") + " lab " + score("#lab") + " logs " + score("#logs"));
             }
-            check("tree " + f + ": felled and animated", logsLeft == 0 && leavesLeft <= orphans + Math.max(2, leaves * 3 / 100) && d > 0 && air == 0 && tr.rot.size() > 30 && max >= 85,
-                logs + " logs/" + leaves + " leaves (" + orphans + " detached), " + air + " invisible displays -> left " + logsLeft + "/" + leavesLeft + ", " + d + " displays, landed " + max + ", " + tr.rot.size() + " ticks, worst tick " + worst / 1_000_000 + " ms");
+            check("tree " + f + ": felled and animated", logsLeft == 0 && leavesLeft <= orphans + Math.max(2, leaves * 3 / 100) && d > 0 && air == 0 && tr.end() - TimberTest.destroyedAt > 30 && max >= 85,
+                logs + " logs/" + leaves + " leaves (" + orphans + " detached), " + air + " invisible displays -> left " + logsLeft + "/" + leavesLeft + ", " + d + " displays, landed " + max + ", " + (tr.end() - TimberTest.destroyedAt) + " ticks, worst tick " + worst / 1_000_000 + " ms");
         }
         info("felling tick cost: " + times);
     }
@@ -1381,6 +1440,7 @@ class Scenarios {
         hold("minecraft:iron_axe");
         stand(-2, 0, -90);
         chop(0, 0, 0);
+        long chopped = TimberTest.destroyedAt;
         Map<String, Integer> want = lootOf(TimberTest.full("entity @e[type=marker,tag=timber.ctl,limit=1] data.drops"));
         lootOf(TimberTest.full("entity @e[type=marker,tag=timber.ctl,limit=1] data.ldrops")).forEach((k, v) -> want.merge(k, v, Integer::sum));
         want.merge("minecraft:oak_log", 1, Integer::sum);
@@ -1388,17 +1448,20 @@ class Scenarios {
         List<net.minecraft.world.entity.Display.BlockDisplay> all = TimberTest.treeDisplays();
         TimberTest.on(() -> { for (var d : all) if (d.entityTags().contains("timber.lg")) height.put(d, TimberTest.<org.joml.Vector3fc>displayData(d, "DATA_TRANSLATION_ID").y()); return null; });
         java.util.Map<net.minecraft.world.entity.Display.BlockDisplay, Integer> gone = new java.util.HashMap<>();
-        int burstAt = -1, lfBefore = tagged("timber.lf"), lgAtBurst = 0;
+        int lfBefore = tagged("timber.lf");
+        int[] burst = {-1, 0}, lastLogs = {itemsOf("minecraft:oak_log", 24)};
         java.util.TreeSet<Integer> logSteps = new java.util.TreeSet<>();
-        int lastLogs = itemsOf("minecraft:oak_log", 24);
-        for (int t = 1; t <= 160 && TimberTest.controllers() > 0; t++) {
-            tick(1);
-            if (burstAt < 0 && tagged("timber.lf") == 0) { burstAt = t; lgAtBurst = tagged("timber.lg"); }
-            for (var e : height.keySet()) if (!gone.containsKey(e) && TimberTest.on(e::isRemoved)) gone.put(e, t);
+        // ticks since the chop, sampled on the server thread every tick
+        TimberTest.await(TimberTest.everyTick(gt -> {
+            int t = (int) (gt - chopped);
+            if (burst[0] < 0 && tagged("timber.lf") == 0) { burst[0] = t; burst[1] = tagged("timber.lg"); }
+            for (var e : height.keySet()) if (!gone.containsKey(e) && e.isRemoved()) gone.put(e, t);
             int n = itemsOf("minecraft:oak_log", 24);
-            if (n > lastLogs) logSteps.add(t);
-            lastLogs = n;
-        }
+            if (n > lastLogs[0]) logSteps.add(t);
+            lastLogs[0] = n;
+            return t < 160 && TimberTest.controllers() > 0;
+        }));
+        int burstAt = burst[0], lgAtBurst = burst[1];
         check("burst: at the slam the crown's leaves burst while the trunk still lies there", lfBefore > 0 && burstAt > 20 && lgAtBurst == logs - 1,
             lfBefore + " leaf displays gone at tick " + burstAt + ", " + lgAtBurst + " log displays left");
         List<Float> hs = new ArrayList<>(new java.util.TreeSet<>(height.values()));
