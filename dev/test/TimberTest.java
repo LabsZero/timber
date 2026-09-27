@@ -672,7 +672,7 @@ class Scenarios {
         tick(5);
         List<String> packs = cmd("datapack list enabled");
         check("base pack runs alone", !packs.toString().contains("hookpack") && packs.toString().contains(System.getProperty("harness.packs", "Timber-")), packs.toString());
-        check("version_id stored for add-ons", cmd("data get storage timber:meta version_id").toString().contains("10300"),
+        check("version_id stored for add-ons", cmd("data get storage timber:meta version_id").toString().contains("10301"),
             cmd("data get storage timber:meta version_id").toString());
         check("no requirement text without add-ons", requiresCount() == -1, "requires=" + requiresCount());
         boolean v263 = cmd("place feature minecraft:red_poplar 2000 -59 2000").toString().contains("Unknown") == false
@@ -1012,15 +1012,47 @@ class Scenarios {
         cmd("fill " + at(-3, 4, -1) + " " + at(-1, 4, 1) + " minecraft:stone");
         chop(0, 6, 0);
         double y0 = TimberTest.on(() -> { for (net.minecraft.world.entity.Entity e : TimberTest.level.getAllEntities()) if (e.entityTags().contains("timber.ctl")) return e.getY(); return Double.NaN; });
-        double yMin = y0;
+        double yMin = y0, stray = 0;
         tr = new TimberTest.AnimTrace();
-        for (int i = 0; i < 90; i++) {
-            double yy = TimberTest.on(() -> { for (net.minecraft.world.entity.Entity e : TimberTest.level.getAllEntities()) if (e.entityTags().contains("timber.ctl")) return e.getY(); return Double.NaN; });
-            if (Double.isNaN(yy)) break;
-            yMin = Math.min(yMin, yy);
+        for (int i = 0; i < 120; i++) {
+            double[] st = TimberTest.on(() -> {
+                net.minecraft.world.entity.Entity ctl = null;
+                for (net.minecraft.world.entity.Entity e : TimberTest.level.getAllEntities()) if (e.entityTags().contains("timber.ctl")) ctl = e;
+                if (ctl == null) return null;
+                double far = 0;
+                for (var d : TimberTest.treeDisplays()) far = Math.max(far, d.position().distanceTo(ctl.position()));
+                return new double[] {ctl.getY(), far};
+            });
+            if (st == null) break;
+            yMin = Math.min(yMin, st[0]);
+            stray = Math.max(stray, st[1]);
             tick(1);
         }
+        int left = displays();
         check("high cut: the top slides off the stump and drops to the ground", y0 - yMin >= 3, "pivot " + y0 + " -> lowest " + yMin);
+        check("high cut: the tree's displays ride the drop down with it and are gone when it ends", stray < 1.01 && left == 0 && TimberTest.controllers() == 0,
+            "farthest display " + stray + " from its controller, " + left + " displays left, " + TimberTest.controllers() + " controllers");
+
+        // displays whose controller is gone (a 1.3.0 dropped tree) are swept within 5 s; a falling tree's are not
+        plot();
+        customTree(0, 0, 7, 2, "oak_log", "oak_leaves");
+        tick(40);
+        hold("minecraft:iron_axe");
+        stand(-2, 0, -90);
+        cmd("summon block_display " + at(6, 0, 6) + " {Tags:[\"timber.d\",\"timber.lg\"],block_state:{Name:\"minecraft:oak_log\",id:\"minecraft:oak_log\"}}");
+        cmd("summon block_display " + at(6, 1, 6) + " {Tags:[\"other.pack\"],block_state:{Name:\"minecraft:oak_log\",id:\"minecraft:oak_log\"}}");
+        chop(0, 0, 0);
+        int live = displays();
+        cmd("function timber:tick/sweep");
+        int kept = displays();
+        java.util.function.Supplier<Integer> others = () -> TimberTest.on(() -> { int n = 0; for (var e : TimberTest.level.getAllEntities()) if (e.entityTags().contains("other.pack")) n++; return n; });
+        check("orphans: the sweep kills a stray tree display, keeps the falling tree's and other packs' displays", kept == live - 1 && kept > 0 && others.get() == 1,
+            live + " displays at the chop (1 stray), " + kept + " after the sweep, other pack's display " + (others.get() == 1 ? "kept" : "gone"));
+        finish(160);
+        cmd("summon block_display " + at(6, 0, 6) + " {Tags:[\"timber.d\",\"timber.lg\"],block_state:{Name:\"minecraft:oak_log\",id:\"minecraft:oak_log\"}}");
+        tick(101);
+        check("orphans: the sweep runs on its own every 5 s", displays() == 0 && others.get() == 1, displays() + " tree displays left");
+        cmd("kill @e[type=block_display,tag=other.pack]");
 
         // leaves in the fall path do not stop the trunk; stone does
         plot();
@@ -1239,7 +1271,7 @@ class Scenarios {
         cmd("scoreboard players reset * tbtest");
         cmd("datapack enable \"file/hookpack\"");
         tick(5);
-        check("hooks: api/loaded runs after version_id is set", tb("#loaded") == 1 && tb("#version_id") == 10300,
+        check("hooks: api/loaded runs after version_id is set", tb("#loaded") == 1 && tb("#version_id") == 10301,
             "loaded=" + tb("#loaded") + " version_id=" + tb("#version_id"));
         cmd("reload");
         tick(5);

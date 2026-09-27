@@ -1,6 +1,10 @@
 # Changelog
 
-## 1.3.0 — unreleased
+## 1.3.1 — 2026-09-27
+- Fixed: a tree cut above a gap (for example after some of its lower logs were already mined) slid off, dropped to the ground and then stayed there as a lying tree that never went away. Its logs and saplings dropped as normal, but the tree itself was left behind.
+- Trees left behind like that by 1.3.0 now disappear on their own within a few seconds of loading in.
+
+## 1.3.0 — 2026-09-26
 - A smoother, weightier fall. The game only sends an entity's tilt in steps of about 1.4°, so the slow moments (the lean-back, the first moment of the fall, the bounces) used to move in small jerks. Every block now carries its exact angle, so the whole tree glides at any frame rate.
 - The chop jolts the tree: its top shivers, then it drops onto the stump with a squash and a little stretch.
 - It leans back with a creak, then starts falling from rest with a crack and speeds up all the way down.

@@ -1,5 +1,5 @@
-data modify storage timber:meta version set value "1.3.0"
-data modify storage timber:meta version_id set value 10300
+data modify storage timber:meta version set value "1.3.1"
+data modify storage timber:meta version_id set value 10301
 data remove storage timber:meta requires
 function timber:load/objectives
 function timber:load/types
