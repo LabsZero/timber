@@ -5,6 +5,7 @@ function timber:rec/leaf with storage timber:op t
 function timber:decor/around
 execute if block ~ ~1 ~ minecraft:snow positioned ~ ~1 ~ run function timber:decor/s/py
 function timber:drops/loot
+execute if block ~ ~ ~ #minecraft:leaves[waterlogged=true] run data modify storage timber:op recs[-1] merge value {w:"true",g:"water"}
 execute if block ~ ~ ~ #minecraft:leaves[waterlogged=true] run return run setblock ~ ~ ~ water
 # a leaf with tree on all six sides is never seen, so it gets no display (it still drops its loot); taken leaves
 # stand in as structure voids until the crown is done (leaves/clear, same tick), so they count as tree

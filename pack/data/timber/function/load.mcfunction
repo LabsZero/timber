@@ -1,10 +1,11 @@
-data modify storage timber:meta version set value "1.3.1"
-data modify storage timber:meta version_id set value 10301
+data modify storage timber:meta version set value "1.3.2"
+data modify storage timber:meta version_id set value 10302
 data remove storage timber:meta requires
 function timber:load/objectives
 function timber:load/types
 function timber:compat/extra_load
 scoreboard players set #-1 timber.data -1
+scoreboard players set #-3 timber.data -3
 scoreboard players set #2 timber.data 2
 scoreboard players set #6 timber.data 6
 scoreboard players set #7 timber.data 7

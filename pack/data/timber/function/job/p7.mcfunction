@@ -21,4 +21,15 @@ execute store result storage timber:op d.transformation.right_rotation[1] float 
 execute store result storage timber:op d.transformation.right_rotation[3] float 0.000001 run data get storage timber:op s.qc 1000000
 scoreboard players set #cw timber.data 600
 scoreboard players set #budget timber.data 600
+data modify storage timber:op d.transformation.scale set value [1.006f,1.006f,1.006f]
+data modify storage timber:op put set value []
+scoreboard players operation #ox timber.data = #cos timber.data
+scoreboard players operation #ox timber.data += #sin timber.data
+scoreboard players operation #ox timber.data *= #-3 timber.data
+scoreboard players operation #ox timber.data /= #10000 timber.data
+scoreboard players operation #oz timber.data = #cos timber.data
+scoreboard players operation #oz timber.data -= #sin timber.data
+scoreboard players operation #oz timber.data *= #-3 timber.data
+scoreboard players operation #oz timber.data /= #10000 timber.data
+execute as @e[type=marker,tag=timber.new,limit=1] at @s run function timber:put/anchor
 execute as @e[type=marker,tag=timber.new,limit=1] at @s run function timber:disp/loop

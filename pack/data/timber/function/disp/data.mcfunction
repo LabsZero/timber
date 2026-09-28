@@ -1,5 +1,6 @@
 data modify storage timber:op cd set value {}
 data modify storage timber:op cd.drops set from storage timber:op drops
+data modify storage timber:op cd.put set from storage timber:op put
 data modify storage timber:op cd.ldrops set from storage timber:op ldrops
 data modify storage timber:op cd.leaf set from storage timber:op seen
 data modify storage timber:op cd.log set from storage timber:op t.log

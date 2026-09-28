@@ -9,6 +9,7 @@ $data modify storage timber:op recs[-1].n set value "$(log)"
 data modify storage timber:op recs[-1].p.axis set value "y"
 $execute if block ~ ~ ~ $(wood)[axis=x] run data modify storage timber:op recs[-1].p.axis set value "x"
 $execute if block ~ ~ ~ $(wood)[axis=z] run data modify storage timber:op recs[-1].p.axis set value "z"
+data modify storage timber:op recs[-1].a set from storage timber:op recs[-1].p.axis
 data modify storage timber:op logs append from storage timber:op recs[-1]
 function timber:job/restore with storage timber:op t
 function timber:drops/loot

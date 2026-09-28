@@ -1,0 +1,1 @@
+$execute if block $(x) $(y) $(z) #timber:put_open run setblock $(x) $(y) $(z) minecraft:resin_clump[north=$(north),east=$(east),south=$(south),west=$(west),up=$(up),down=$(down),waterlogged=$(w)] strict

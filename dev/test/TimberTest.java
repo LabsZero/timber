@@ -620,9 +620,11 @@ class Scenarios {
         cmd("fill " + at(dx, 0, dz) + " " + at(dx, h - 1, dz) + " minecraft:" + log);
     }
 
+    /** Chops and waits past the put-back tick: the chop tick puts the felled blocks back for one tick (a new display
+     * is drawn only after its first client tick), the next tick removes them. */
     static boolean chop(int dx, int dy, int dz) throws Exception {
         boolean ok = TimberTest.destroy(p(dx, dy, dz));
-        tick(1);
+        tick(2);
         return ok;
     }
 
@@ -672,7 +674,7 @@ class Scenarios {
         tick(5);
         List<String> packs = cmd("datapack list enabled");
         check("base pack runs alone", !packs.toString().contains("hookpack") && packs.toString().contains(System.getProperty("harness.packs", "Timber-")), packs.toString());
-        check("version_id stored for add-ons", cmd("data get storage timber:meta version_id").toString().contains("10301"),
+        check("version_id stored for add-ons", cmd("data get storage timber:meta version_id").toString().contains("10302"),
             cmd("data get storage timber:meta version_id").toString());
         check("no requirement text without add-ons", requiresCount() == -1, "requires=" + requiresCount());
         boolean v263 = cmd("place feature minecraft:red_poplar 2000 -59 2000").toString().contains("Unknown") == false
@@ -682,6 +684,7 @@ class Scenarios {
         String only = System.getProperty("scn", "");
         if (only.isEmpty() || only.contains("oak")) oakFullCycle();
         if (only.isEmpty() || only.contains("swap")) swap();
+        if (only.isEmpty() || only.contains("swap")) putBack();
         if (only.isEmpty() || only.contains("gates")) gates();
         if (only.isEmpty() || only.contains("protection")) protection();
         if (only.isEmpty() || only.contains("neighbours")) neighbours();
@@ -714,8 +717,8 @@ class Scenarios {
         chop(0, 0, 0);
         long chopped = TimberTest.destroyedAt;
         int d = displays();
-        check("oak: world blocks replaced by displays in one tick", count(Scenarios::isLog, 6) == 0 && count(Scenarios::natLeaf, 6) == 0,
-            "logs left " + count(Scenarios::isLog, 6) + ", leaves left " + count(Scenarios::natLeaf, 6));
+        check("oak: world blocks replaced by displays", count(Scenarios::isLog, 6) == 0 && count(s -> s.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock, 6) == 0,
+            "logs left " + count(Scenarios::isLog, 6) + ", leaves left " + count(s -> s.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock, 6));
         check("oak: one display per felled block, none for leaves shut in on all sides", hidden > 0 && d == logs - 1 + leaves - hidden,
             d + " displays for " + (logs - 1) + " logs + " + leaves + " leaves - " + hidden + " enclosed");
         check("oak: no stand-in blocks left behind", blocks("minecraft:structure_void", 8) == 0, blocks("minecraft:structure_void", 8) + " structure voids");
@@ -746,6 +749,40 @@ class Scenarios {
         int dropped = itemsOf("minecraft:oak_log", 24);
         check("oak: every log dropped", dropped == logs, dropped + " of " + logs);
         check("oak: axe used 1 per log", damage() == logs, "damage " + damage() + " for " + logs + " logs");
+    }
+
+    /** A new display is drawn only after its first client tick: the chop tick must end with the displays spawned and
+     * the visible blocks still in the world (put back), and the next tick must remove them. Sampled inside each tick. */
+    static void putBack() throws Exception {
+        plot();
+        customTree(0, 0, 6, 2, "oak_log", "oak_leaves");
+        tick(40);
+        int logs = count(Scenarios::isLog, 6), leaves = count(Scenarios::natLeaf, 6), hidden = enclosedLeaves(6);
+        java.util.function.Predicate<BlockState> leaf = s -> s.getBlock() instanceof net.minecraft.world.level.block.LeavesBlock;
+        hold("minecraft:iron_axe");
+        stand(-2, 0, -90);
+        List<int[]> samples = new ArrayList<>();
+        java.util.concurrent.CompletableFuture<Void> done = TimberTest.everyTick(gt -> {
+            int n = TimberTest.treeDisplays().size();
+            if (n == 0 && samples.isEmpty()) return gt < 400 + TimberTest.destroyedAt;
+            int lg = 0, lf = 0;
+            for (BlockPos q : BlockPos.betweenClosed(cx - 6, Y - 1, cz - 6, cx + 6, Y + 40, cz + 6)) {
+                BlockState st = TimberTest.level.getBlockState(q);
+                if (isLog(st)) lg++;
+                if (leaf.test(st)) lf++;
+            }
+            samples.add(new int[] {n, lg, lf, TimberTest.level.getBlockState(p(0, 1, 0)).isAir() ? 1 : 0});
+            return samples.size() < 2;
+        });
+        TimberTest.destroy(p(0, 0, 0));
+        TimberTest.await(done);
+        int[] a = samples.get(0), b = samples.size() > 1 ? samples.get(1) : new int[] {-1, -1, -1};
+        // the displays hang from the cell above the cut (this oak hangs): that log stays out, a display is lit by its cell
+        check("put-back: the chop tick ends with the displays spawned and the visible blocks still in place, except the displays' anchor cell",
+            a[0] > 0 && a[1] == logs - 2 && a[2] == leaves - hidden && a[3] == 1,
+            a[0] + " displays, logs " + a[1] + " of " + (logs - 2) + ", leaves " + a[2] + " of " + (leaves - hidden) + ", anchor cell air " + a[3]);
+        check("put-back: the next tick removes them, displays stay", b[0] == a[0] && b[1] == 0 && b[2] == 0, b[0] + " displays, logs " + b[1] + ", leaves " + b[2]);
+        finish(120);
     }
 
     /** At the swap tick every display must sit exactly on the block it replaced (entity yaw + left_rotation + translation). */
@@ -1271,7 +1308,7 @@ class Scenarios {
         cmd("scoreboard players reset * tbtest");
         cmd("datapack enable \"file/hookpack\"");
         tick(5);
-        check("hooks: api/loaded runs after version_id is set", tb("#loaded") == 1 && tb("#version_id") == 10301,
+        check("hooks: api/loaded runs after version_id is set", tb("#loaded") == 1 && tb("#version_id") == 10302,
             "loaded=" + tb("#loaded") + " version_id=" + tb("#version_id"));
         cmd("reload");
         tick(5);

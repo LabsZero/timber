@@ -1,3 +1,4 @@
+execute if entity @s[tag=timber.put] run function timber:put/clear
 function timber:anim/ctx
 kill @e[type=block_display,tag=timber.d,distance=..0.01]
 execute positioned ~ ~1 ~ run kill @e[type=block_display,tag=timber.d,distance=..0.01]

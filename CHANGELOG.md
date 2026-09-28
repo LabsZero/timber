@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2 — 2026-09-28
+- Fixed a flicker at the chop: the tree vanished for a split second before its falling copy appeared (most visible at high frame rates). The falling tree now appears first and the real blocks are removed a tick later.
+- For pack authors: `timber:meta version_id` is now 10302.
+
 ## 1.3.1 — 2026-09-27
 - Fixed: a tree cut above a gap (for example after some of its lower logs were already mined) slid off, dropped to the ground and then stayed there as a lying tree that never went away. Its logs and saplings dropped as normal, but the tree itself was left behind.
 - Trees left behind like that by 1.3.0 now disappear on their own within a few seconds of loading in.

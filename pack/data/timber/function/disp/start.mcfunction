@@ -27,6 +27,8 @@ tag @s add timber.flex
 tag @s add timber.shiver
 function timber:disp/data
 data modify entity @s data set from storage timber:op cd
+execute if data storage timber:op put[0] run tag @s add timber.put
+execute if data storage timber:op put[0] run tag @s add timber.putnew
 playsound minecraft:block.wood.break block @a ~ ~ ~ 1 0.6
 particle minecraft:small_gust ~ ~0.5 ~ 0.25 0.2 0.25 0 1
 function timber:anim/fx/shake with storage timber:op cd
