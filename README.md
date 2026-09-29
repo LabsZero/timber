@@ -50,6 +50,17 @@ Operators open a clickable menu with `/function timber:settings`. It sets the ma
 
 Use only one of the three. To remove Timber cleanly, run `/function timber:uninstall` first.
 
+![More from Profet](https://raw.githubusercontent.com/ProfetGit/timber/main/docs/desc/title-more-from-profet.png)
+
+<!-- promo:start -->
+<p align="center">
+<a href="https://modrinth.com/datapack/vanilla-veinminer"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/veinminer.gif" alt="Veinminer: One swing. Whole vein. Server side." width="49%"></a>
+<a href="https://www.curseforge.com/minecraft/mc-mods/tidy-pockets"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/tidy-pockets.gif" alt="Tidy Pockets: One click. All sorted. Client side." width="49%"></a>
+<a href="https://www.curseforge.com/minecraft/mc-mods/having-a-blast"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/having-a-blast.gif" alt="Having a Blast: One boom. Bouncy blocks. Client or server." width="49%"></a>
+<a href="https://www.curseforge.com/minecraft/mc-mods/far-out-zoom"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/far-out-zoom.gif" alt="Far Out Zoom: The horizon, up close. Client side." width="49%"></a>
+</p>
+<!-- promo:end -->
+
 ![Support](https://raw.githubusercontent.com/ProfetGit/timber/main/docs/desc/title-support.png)
 
 Timber is free. If it saves you some chopping, a coffee helps fund the next update.
