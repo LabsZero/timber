@@ -40,7 +40,7 @@ Operators open a clickable menu with `/function timber:settings`. It sets the ma
 
 ![Add-ons](https://raw.githubusercontent.com/ProfetGit/timber/main/docs/desc/title-add-ons.png)
 
-**[Enchanted Timber](https://modrinth.com/datapack/enchanted-timber)** turns tree felling into an axe enchantment you have to find first. Making your own add-on? See the [add-on API](https://github.com/ProfetGit/timber/blob/main/docs/api.md).
+**[Enchanted Timber](https://www.curseforge.com/minecraft/mc-mods/enchanted-timber)** turns tree felling into an axe enchantment you have to find first. Making your own add-on? See the [add-on API](https://github.com/ProfetGit/timber/blob/main/docs/api.md).
 
 ![Installation](https://raw.githubusercontent.com/ProfetGit/timber/main/docs/desc/title-installation.png)
 
@@ -54,7 +54,7 @@ Use only one of the three. To remove Timber cleanly, run `/function timber:unins
 
 <!-- promo:start -->
 <p align="center">
-<a href="https://modrinth.com/datapack/vanilla-veinminer"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/veinminer.gif" alt="Veinminer: One swing. Whole vein. Server side." width="49%"></a>
+<a href="https://www.curseforge.com/minecraft/mc-mods/profets-veinminer"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/veinminer.gif" alt="Veinminer: One swing. Whole vein. Server side." width="49%"></a>
 <a href="https://www.curseforge.com/minecraft/mc-mods/tidy-pockets"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/tidy-pockets.gif" alt="Tidy Pockets: One click. All sorted. Client side." width="49%"></a>
 <a href="https://www.curseforge.com/minecraft/mc-mods/having-a-blast"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/having-a-blast.gif" alt="Having a Blast: One boom. Bouncy blocks. Client or server." width="49%"></a>
 <a href="https://www.curseforge.com/minecraft/mc-mods/far-out-zoom"><img src="https://raw.githubusercontent.com/ProfetGit/assets/main/promo/far-out-zoom.gif" alt="Far Out Zoom: The horizon, up close. Client side." width="49%"></a>

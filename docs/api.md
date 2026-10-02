@@ -1,6 +1,6 @@
 # Timber add-on API
 
-Hooks for data packs that build on Timber, for example [Enchanted Timber](https://modrinth.com/datapack/enchanted-timber).
+Hooks for data packs that build on Timber, for example [Enchanted Timber](https://www.curseforge.com/minecraft/mc-mods/enchanted-timber).
 
 Timber 1.1.0 and newer offer these hooks. They are safe to use when Timber isn't installed, because a tag your pack adds to is simply never called.
 
